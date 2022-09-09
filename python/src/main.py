@@ -1,81 +1,7 @@
 #!/usr/bin/env python
 from numpydoc.docscrape import NumpyDocString
 from numpydoc.docscrape import FunctionDoc
-from copy import copy
-
-
-class Photo:
-    """
-    Array with associated photographic information.
-
-    Parameters
-    ----------
-    x : type
-        Description of parameter `x`.
-    y
-        Description of parameter `y` (with type not specified)
-
-    Attributes
-    ----------
-    exposure : float
-        Exposure in seconds.
-
-    Methods
-    -------
-    colorspace(c='rgb')
-        Represent the photo in the given colorspace.
-    gamma(n=1.0)
-        Change the photo's gamma exposure.
-
-    """
-
-
-def foobar(a, b):
-    """
-    Something something.
-
-    Parameters
-    ----------
-    a : int, default: 5
-         Does something cool
-    b : str
-         Wow
-    """
-    return a + b
-
-
-def foobar2(a, b):
-    """A new description
-
-    Parameters
-    ----------
-    a : int
-        Does something cool
-    b :
-
-    Examples
-    --------
-    FIXME: Add docs.
-
-    """
-    return a + b
-
-
-def foobar3(a, b):
-    """A new description
-
-    Parameters
-    ----------
-    a : int
-        Does something cool
-    b : str
-        Wow
-
-    Examples
-    --------
-    FIXME: Add docs.
-
-    """
+import argparse
 
 
 def merge_parameters(existing: list, new: list) -> list:
@@ -88,7 +14,7 @@ def merge_parameters(existing: list, new: list) -> list:
         # If empty, we'll continue to use the existing description.
         if param.desc != []:
             # existing = [e for e in existing if e.name != param.name]
-            result.append(param) # The parameter is in the correct position.
+            result.append(param)  # The parameter is in the correct position.
         else:
             # In this case we need to find the corresponding parameter in existing.
             for existing_param in existing:
@@ -97,45 +23,43 @@ def merge_parameters(existing: list, new: list) -> list:
     return result
 
 
-def merge_summary(existing: str, new: str) -> str:
-    """Merge the summary section.
+def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
+    """Merge two FunctionDocs.
 
-    Return the new summary if it exists, because that means it was updated.
+    Prioritizes the new docs
 
     Parameters
     ----------
-    existing : str
-        The existing summary
-    new : str
-        The new summary
+    existing : FunctionDoc
+    new : FunctionDoc
 
     Returns
     -------
-    str
-        The updated summary
+    FunctionDoc
 
     Examples
     --------
     FIXME: Add docs.
 
+
     """
-    return new if new != "" else existing
+    new["Parameters"] = merge_parameters(existing["Parameters"], new["Parameters"])
+    for k, v in new.items():
+        if k in ["Parameters"]:
+            continue
+        # If a field in new is empty we put in what was there before.
+        if not v and k in existing:
+            new[k] = existing[k]
+    return new
 
 
 def main():
     """Quiet."""
-    # doc = NumpyDocString(Photo.__doc__)
-    # print(doc["Summary"])
-    # print(doc["Parameters"])
-    # print(doc["Attributes"])
-    # print(doc["Methods"])
-
-    doc = FunctionDoc(foobar)
-    doc2 = FunctionDoc(foobar2)
-    doc3 = FunctionDoc(foobar3)
-    merged = merge_parameters(doc["Parameters"], doc2["Parameters"])
-    assert merged == doc3["Parameters"]
-    print(doc["Parameters"])
+    parser = argparse.ArgumentParser(description="Merge an old docstring with a new one. Prioritizes the new one.")
+    parser.add_argument("existing", type=str, help="The existing docstring.")
+    parser.add_argument("new", type=str, help="The new docstring.")
+    args = parser.parse_args()
+    print(merge(NumpyDocString(args.existing), NumpyDocString(args.new)))
 
 
 if __name__ == "__main__":

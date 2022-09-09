@@ -6,3 +6,5 @@ README.html
 # Added automatically by ‘eldev init’.
 /.eldev
 /Eldev-local
+/python/src/__pycache__/
+/python/tests/__pycache__/
