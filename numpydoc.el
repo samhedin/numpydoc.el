@@ -577,6 +577,37 @@ function that is being documented."
       (numpydoc--insert-docstring (numpydoc--detect-indent)
                                   (numpydoc--parse-def fnsig)))))
 
+
+(defun numpydoc--python-get-function-docstring ()
+  (save-excursion
+    (python-nav-beginning-of-defun)
+    (python-nav-end-of-statement)
+    (end-of-line)
+    (right-char)
+    (back-to-indentation)
+    (let* ((function-doc-start (+ 3 (point)))
+           (function-doc-end (+ function-doc-start
+                                (string-match
+                                 "\"\"\""
+                                 (buffer-substring-no-properties
+                                               function-doc-start
+                                               (point-max))))))
+      (buffer-substring-no-properties function-doc-start function-doc-end))))
+
+(defun numpydoc--python-insert-function-docstring (str)
+  "Insert STR into the docstring position of current function.
+Also inserts triple quotes."
+  (save-excursion
+    (let ((indent (make-string (numpydoc--detect-indent) ?\s)))
+      (python-nav-beginning-of-defun)
+      (python-nav-end-of-statement)
+      (insert "\n")
+      (insert indent)
+      (insert "\"\"\"\n")
+      (insert indent)
+      (insert str)
+      (insert "\"\"\""))))
+
 ;; Local Variables:
 ;; sentence-end-double-space: nil
 ;; End:
