@@ -51,6 +51,7 @@
 
 (require 'dash)
 (require 's)
+(require 's)
 
 ;; forward declare some yasnippet code.
 (defvar yas-indent-line)
@@ -418,10 +419,10 @@ This function assumes the cursor to be in the function body."
   (let* ((tmpd (cond ((numpydoc--yas-p) numpydoc--yas-replace-pat)
                      (t numpydoc-template-arg-desc)))
          (desc (concat (make-string 4 ?\s)
-                      (if (numpydoc--prompt-p)
-                          (read-string (format "Description for %s: "
-                                               element))
-                        tmpd))))
+                       (if (numpydoc--prompt-p)
+                           (read-string (format "Description for %s: "
+                                                element))
+                         tmpd))))
     (numpydoc--insert indent desc)
     (numpydoc--fill-last-insertion)
     (insert "\n")))
@@ -578,7 +579,7 @@ function that is being documented."
                                   (numpydoc--parse-def fnsig)))))
 
 
-(defun numpydoc--python-get-function-docstring ()
+(defun numpydoc--get-function-docstring ()
   (save-excursion
     (python-nav-beginning-of-defun)
     (python-nav-end-of-statement)
@@ -590,8 +591,8 @@ function that is being documented."
                                 (string-match
                                  "\"\"\""
                                  (buffer-substring-no-properties
-                                               function-doc-start
-                                               (point-max))))))
+                                  function-doc-start
+                                  (point-max))))))
       (buffer-substring-no-properties function-doc-start function-doc-end))))
 
 (defun numpydoc--python-insert-function-docstring (str)
@@ -607,6 +608,113 @@ Also inserts triple quotes."
       (insert indent)
       (insert str)
       (insert "\"\"\""))))
+
+(defun numpydoc--python-merge-docstrings (old new)
+  "Use Python to merge two docstrings.
+OLD is the old docstring, while NEW is the new docstring."
+  (shell-command-to-string (format "python %s %s %s" (f-expand "python/src/main.py") old new)))
+
+(numpydoc--python-merge-docstrings "hello" "world")
+(find-library "numpydoc")
+
+(defun numpydoc-python-generate ()
+  "Generate NumPy style docstring for Python function.
+Assumes that the current location of the cursor is somewhere in the
+function that is being documented."
+  (interactive)
+  (let* ((fnsig (numpydoc--extract-def-sig))
+         (old (when (numpydoc--has-existing-docstring-p)
+                (numpydoc--get-function-docstring)))
+         (new (progn
+                (when (numpydoc--has-existing-docstring-p)
+                  (numpydoc--delete-existing))
+                (python-nav-beginning-of-defun)
+                (python-nav-end-of-statement)
+                (numpydoc--insert-docstring (numpydoc--detect-indent)
+                                            (numpydoc--parse-def fnsig))
+                (numpydoc--get-function-docstring))))
+    (when old
+      (numpydoc--delete-existing)
+      (numpydoc--python-insert-function-docstring
+       (numpydoc--python-merge-docstrings old new)))))
+
+
+(setq str
+      "Merge two FunctionDocs.
+
+    Prioritizes the new docs,
+    and we also have some nice newlines.
+
+    Parameters
+    ----------
+    existing : FunctionDoc
+    new : FunctionDoc
+
+    Returns
+    -------
+    FunctionDoc
+
+    Examples
+    --------
+    FIXME: Add docs.
+")
+(setq str-without-summary
+      "Parameters
+    ----------
+    existing : FunctionDoc
+    new : FunctionDoc
+
+    Returns
+    -------
+    FunctionDoc
+
+    Examples
+    --------
+    FIXME: Add docs.
+")
+
+(defun numpydoc--parse-docstring (str)
+  "Parse the docstring STR into a hashmap."
+  (let* ((ht (make-hash-table :test 'equal))
+         (short-summary-end (string-match "\n\n" str))
+         (long-summary-end (string-match "\n\n" str (+ 2 short-summary-end)))
+         (str-without-summary (string-trim-left
+                               (substring str long-summary-end))))
+    (puthash "short-summary"
+             (string-trim-left (substring str 0 short-summary-end)) ht)
+    (puthash "long-summary" (string-trim-left
+                             (substring str short-summary-end
+                                        long-summary-end)) ht)
+
+    (dolist (s (split-string str-without-summary "\n\n"))
+      (let* ((split (split-string s "\n"))
+             (section-title (nth 0 split))
+             (body (if (string-equal section-title "Parameters")
+                       (mapcar (lambda (p)
+                                 (numpydoc--arg-str-to-struct
+                                  (string-trim-left p))) (seq-drop split 2))
+                     (seq-drop split 2))))
+        (puthash section-title body ht)))
+    ht))
+
+
+(numpydoc--insert 4 (xah-hash-to-list ht))
+
+(defun xah-hash-to-list (HashTable)
+  "Return a list that represent the HASHTABLE
+Each element is a proper list: '(key value).
+
+URL `http://xahlee.info/emacs/emacs/elisp_hash_table.html'
+Version 2019-06-11 2022-05-28"
+  (let (($result nil))
+    (maphash
+     (lambda (k v)
+       (push (list k v) $result))
+     HashTable)
+    $result))
+(setq ht (numpydoc--parse-docstring str))
+(string-equal
+ (numpydoc--hashmap-to-docstring (numpydoc--parse-docstring str)) str)
 
 ;; Local Variables:
 ;; sentence-end-double-space: nil

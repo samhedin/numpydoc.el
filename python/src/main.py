@@ -24,7 +24,8 @@ def merge_parameters(existing: list, new: list) -> list:
 
 
 def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
-    """Merge two FunctionDocs.
+    """
+    Merge two FunctionDocs.
 
     Prioritizes the new docs
 
@@ -53,9 +54,28 @@ def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
     return new
 
 
+def atest(b: int):
+    """a desc
+
+    a long
+
+    Parameters
+    ----------
+    b : int
+        snat
+
+    Examples
+    --------
+    FIXME: Add docs.
+
+    """
+
+
 def main():
     """Quiet."""
-    parser = argparse.ArgumentParser(description="Merge an old docstring with a new one. Prioritizes the new one.")
+    parser = argparse.ArgumentParser(
+        description="Merge an old docstring with a new one. Prioritizes the new one."
+    )
     parser.add_argument("existing", type=str, help="The existing docstring.")
     parser.add_argument("new", type=str, help="The new docstring.")
     args = parser.parse_args()

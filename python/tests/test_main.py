@@ -2,6 +2,7 @@
 from numpydoc.docscrape import FunctionDoc
 from src.main import merge_parameters, merge
 
+
 def foobar(a, b):
     """
     Something something.
