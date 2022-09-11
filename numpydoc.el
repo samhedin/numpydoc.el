@@ -138,7 +138,8 @@ text, and below the Examples section."
 (cl-defstruct numpydoc--arg
   name
   type
-  defval)
+  defval
+  description)
 
 (defconst numpydoc--yas-replace-pat "--NPDOCYAS--"
   "Temporary text to be replaced for yasnippet usage.")
@@ -152,7 +153,7 @@ text, and below the Examples section."
 (defun numpydoc--none-to-optional (type)
   (replace-regexp-in-string (rx " | None" eos) ", optional" type t t))
 
-(defun numpydoc--arg-str-to-struct (argstr)
+(defun numpydoc--arg-str-to-struct (argstr &optional indent)
   "Convert ARGSTR to an instance of `numpydoc--arg'.
 The argument takes on one of four possible styles:
 1. First we check for a typed argument with a default value, so it
@@ -169,21 +170,27 @@ The argument takes on one of four possible styles:
                 (comps2 (s-split-up-to ":" (car comps1) 1))
                 (defval (s-trim (cadr comps1)))
                 (name (s-trim (car comps2)))
-                (type (cadr comps2)))
+                (type (s-trim (car (s-split-up-to "        " (cadr comps2) 1))))
+                (description (cadr (s-split-up-to "        " (cadr comps2) 1))))
            (make-numpydoc--arg :name name
                                :type (if type
                                          (numpydoc--none-to-optional (s-trim type))
                                        nil)
-                               :defval defval)))
+                               :defval defval
+                               :description (when description
+                                                (s-trim description)))))
         ;; only a typehint
         ((and (string-match-p ":" argstr)
               (not (s-contains-p "=" argstr)))
          (let* ((comps1 (s-split-up-to ":" argstr 1))
                 (name (s-trim (car comps1)))
-                (type (s-trim (cadr comps1))))
+                (type (s-trim (car (s-split-up-to "        " (cadr comps1) 1))))
+                (description (cadr (s-split-up-to "        " (cadr comps1) 1))))
            (make-numpydoc--arg :name name
                                :type (numpydoc--none-to-optional type)
-                               :defval nil)))
+                               :defval nil
+                               :description (when description
+                                                (s-trim description)))))
         ;; only a default value
         ((s-contains-p "=" argstr)
          (let* ((comps1 (s-split-up-to "=" argstr 1))
@@ -193,9 +200,10 @@ The argument takes on one of four possible styles:
                                :type nil
                                :defval defval)))
         ;; only a name
-        (t (make-numpydoc--arg :name argstr
+        (t (make-numpydoc--arg :name  (nth 0 (s-split-up-to " " argstr 1))
                                :type nil
-                               :defval nil))))
+                               :defval nil
+                               :description (s-trim (nth 1 (s-split-up-to " " argstr 1)))))))
 
 (defun numpydoc--split-args (fnargs)
   "Split FNARGS on comma but ignore those in type [brackets]."
@@ -639,82 +647,84 @@ function that is being documented."
        (numpydoc--python-merge-docstrings old new)))))
 
 
-(setq str
-      "Merge two FunctionDocs.
 
-    Prioritizes the new docs,
-    and we also have some nice newlines.
+(setq str "A short description.
+
+    A long desc\nwith multiple lines!
 
     Parameters
     ----------
-    existing : FunctionDoc
-    new : FunctionDoc
-
-    Returns
-    -------
-    FunctionDoc
+    a :
+        A description
+    b : int
+    c : int
+        My favorite variable
+    x
 
     Examples
     --------
     FIXME: Add docs.
+
 ")
-(setq str-without-summary
-      "Parameters
+
+(setq str "A short description.
+
+    A long desc\nwith multiple lines!
+
+    Parameters
     ----------
-    existing : FunctionDoc
-    new : FunctionDoc
-
-    Returns
-    -------
-    FunctionDoc
+    x
+        A description
 
     Examples
     --------
     FIXME: Add docs.
+
 ")
 
-(defun numpydoc--parse-docstring (str)
-  "Parse the docstring STR into a hashmap."
-  (let* ((ht (make-hash-table :test 'equal))
-         (short-summary-end (string-match "\n\n" str))
+(defun numpydoc--insert-plist (indent result)
+  (interactive)
+  (numpydoc--insert-parameters indent (plist-get result "Parameters" 'equal)))
+
+(defun numpydoc--preprocess-argstrings (indent split)
+  (let ((parameter-strings))
+    (dolist (p (seq-drop split 2))
+      (if (string-match (format "\\s-\\{%d\\}" (* 2 indent)) p)
+          (setf (car parameter-strings) (concat (car parameter-strings) p))
+        (push p parameter-strings)))
+    (nreverse parameter-strings)))
+
+(defun numpydoc--parse-docstring (indent str)
+  "Parse the docstring STR into a plist.
+If you want to use `plist-get' set the predicate
+to `equal'."
+  (let* ((short-summary-end (string-match "\n\n" str))
          (long-summary-end (string-match "\n\n" str (+ 2 short-summary-end)))
          (str-without-summary (string-trim-left
-                               (substring str long-summary-end))))
-    (puthash "short-summary"
-             (string-trim-left (substring str 0 short-summary-end)) ht)
-    (puthash "long-summary" (string-trim-left
-                             (substring str short-summary-end
-                                        long-summary-end)) ht)
-
+                               (substring str long-summary-end)))
+         (result `("short-summary" ,(string-trim-left (substring str 0 short-summary-end))
+                   "long-summary" ,(string-trim-left
+                                    (substring str short-summary-end
+                                               long-summary-end)))))
     (dolist (s (split-string str-without-summary "\n\n"))
       (let* ((split (split-string s "\n"))
              (section-title (nth 0 split))
              (body (if (string-equal section-title "Parameters")
                        (mapcar (lambda (p)
                                  (numpydoc--arg-str-to-struct
-                                  (string-trim-left p))) (seq-drop split 2))
+                                  (string-trim-left p) indent))
+                               (numpydoc--preprocess-argstrings indent split))
                      (seq-drop split 2))))
-        (puthash section-title body ht)))
-    ht))
+        (setq result
+              (plist-put result section-title body))))
+    result))
+(numpydoc--parse-docstring 4 str)
 
 
-(numpydoc--insert 4 (xah-hash-to-list ht))
-
-(defun xah-hash-to-list (HashTable)
-  "Return a list that represent the HASHTABLE
-Each element is a proper list: '(key value).
-
-URL `http://xahlee.info/emacs/emacs/elisp_hash_table.html'
-Version 2019-06-11 2022-05-28"
-  (let (($result nil))
-    (maphash
-     (lambda (k v)
-       (push (list k v) $result))
-     HashTable)
-    $result))
-(setq ht (numpydoc--parse-docstring str))
-(string-equal
- (numpydoc--hashmap-to-docstring (numpydoc--parse-docstring str)) str)
+;; (let* ((beginning (string-match (rx (repeat 8 (any whitespace))) s))
+;;        (end (string-match (rx (= 4 (any whitespace))) s
+;;                                         (+ beginning (* 2 indent)))))
+;;   (substring s beginning end))
 
 ;; Local Variables:
 ;; sentence-end-double-space: nil

@@ -54,19 +54,23 @@ def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
     return new
 
 
-def atest(b: int):
-    """a desc
+def atest(a, b: int, c: int = 3):
+    """A short description.
 
-    a long
+    A long desc\on multiple lines
 
     Parameters
     ----------
+    a : str
+        Great variable
     b : int
-        snat
+    c : int
+        A number
 
     Examples
     --------
     FIXME: Add docs.
+
 
     """
 
