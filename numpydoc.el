@@ -645,6 +645,12 @@ if __name__ == '__main__':
                    old
                    new))))
 
+(defun numpydoc-dwim ()
+  (interactive)
+  (if (numpydoc--has-existing-docstring-p)
+      (numpydoc-update)
+    (numpydoc-generate)))
+
 (defun numpydoc-update ()
   "Update the docstring in the current function."
   (interactive)
