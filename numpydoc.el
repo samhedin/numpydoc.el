@@ -178,7 +178,7 @@ The argument takes on one of four possible styles:
                                        nil)
                                :defval defval
                                :description (when description
-                                                (s-trim description)))))
+                                              (s-trim description)))))
         ;; only a typehint
         ((and (string-match-p ":" argstr)
               (not (s-contains-p "=" argstr)))
@@ -190,7 +190,7 @@ The argument takes on one of four possible styles:
                                :type (numpydoc--none-to-optional type)
                                :defval nil
                                :description (when description
-                                                (s-trim description)))))
+                                              (s-trim description)))))
         ;; only a default value
         ((s-contains-p "=" argstr)
          (let* ((comps1 (s-split-up-to "=" argstr 1))
@@ -200,10 +200,13 @@ The argument takes on one of four possible styles:
                                :type nil
                                :defval defval)))
         ;; only a name
-        (t (make-numpydoc--arg :name  (nth 0 (s-split-up-to " " argstr 1))
-                               :type nil
-                               :defval nil
-                               :description (s-trim (nth 1 (s-split-up-to " " argstr 1)))))))
+        (t (let* ((split (s-split-up-to " " argstr 1))
+                 (description (nth 1 split)))
+             (make-numpydoc--arg :name  (nth 0 split)
+                                             :type nil
+                                             :defval nil
+                                             :description (when description
+                                                            (s-trim description)))))))
 
 (defun numpydoc--split-args (fnargs)
   "Split FNARGS on comma but ignore those in type [brackets]."
@@ -587,7 +590,29 @@ function that is being documented."
                                   (numpydoc--parse-def fnsig)))))
 
 
-(defun numpydoc--get-function-docstring ()
+
+(defun numpydoc-update ()
+  "Generate NumPy style docstring for Python function.
+Assumes that the current location of the cursor is somewhere in the
+function that is being documented."
+  (interactive)
+  (let* ((indent (numpydoc--detect-indent))
+         (old (when (numpydoc--has-existing-docstring-p)
+                (numpydoc--python-get-function-docstring)))
+         (new (progn
+                (numpydoc--delete-existing)
+                (numpydoc-generate)
+                (numpydoc--parse-docstring indent
+                 (numpydoc--get-function-docstring)))))
+    (when old
+      (numpydoc--delete-existing)
+      (numpydoc-python-merge-docstrings old new))))
+
+
+(defun numpydoc-python-merge-docstrings (old new)
+  )
+
+(defun numpydoc--python-get-function-docstring ()
   (save-excursion
     (python-nav-beginning-of-defun)
     (python-nav-end-of-statement)
@@ -599,8 +624,8 @@ function that is being documented."
                                 (string-match
                                  "\"\"\""
                                  (buffer-substring-no-properties
-                                  function-doc-start
-                                  (point-max))))))
+                                               function-doc-start
+                                               (point-max))))))
       (buffer-substring-no-properties function-doc-start function-doc-end))))
 
 (defun numpydoc--python-insert-function-docstring (str)
@@ -617,114 +642,6 @@ Also inserts triple quotes."
       (insert str)
       (insert "\"\"\""))))
 
-(defun numpydoc--python-merge-docstrings (old new)
-  "Use Python to merge two docstrings.
-OLD is the old docstring, while NEW is the new docstring."
-  (shell-command-to-string (format "python %s %s %s" (f-expand "python/src/main.py") old new)))
-
-(numpydoc--python-merge-docstrings "hello" "world")
-(find-library "numpydoc")
-
-(defun numpydoc-python-generate ()
-  "Generate NumPy style docstring for Python function.
-Assumes that the current location of the cursor is somewhere in the
-function that is being documented."
-  (interactive)
-  (let* ((fnsig (numpydoc--extract-def-sig))
-         (old (when (numpydoc--has-existing-docstring-p)
-                (numpydoc--get-function-docstring)))
-         (new (progn
-                (when (numpydoc--has-existing-docstring-p)
-                  (numpydoc--delete-existing))
-                (python-nav-beginning-of-defun)
-                (python-nav-end-of-statement)
-                (numpydoc--insert-docstring (numpydoc--detect-indent)
-                                            (numpydoc--parse-def fnsig))
-                (numpydoc--get-function-docstring))))
-    (when old
-      (numpydoc--delete-existing)
-      (numpydoc--python-insert-function-docstring
-       (numpydoc--python-merge-docstrings old new)))))
-
-
-
-(setq str "A short description.
-
-    A long desc\nwith multiple lines!
-
-    Parameters
-    ----------
-    a :
-        A description
-    b : int
-    c : int
-        My favorite variable
-    x
-
-    Examples
-    --------
-    FIXME: Add docs.
-
-")
-
-(setq str "A short description.
-
-    A long desc\nwith multiple lines!
-
-    Parameters
-    ----------
-    x
-        A description
-
-    Examples
-    --------
-    FIXME: Add docs.
-
-")
-
-(defun numpydoc--insert-plist (indent result)
-  (interactive)
-  (numpydoc--insert-parameters indent (plist-get result "Parameters" 'equal)))
-
-(defun numpydoc--preprocess-argstrings (indent split)
-  (let ((parameter-strings))
-    (dolist (p (seq-drop split 2))
-      (if (string-match (format "\\s-\\{%d\\}" (* 2 indent)) p)
-          (setf (car parameter-strings) (concat (car parameter-strings) p))
-        (push p parameter-strings)))
-    (nreverse parameter-strings)))
-
-(defun numpydoc--parse-docstring (indent str)
-  "Parse the docstring STR into a plist.
-If you want to use `plist-get' set the predicate
-to `equal'."
-  (let* ((short-summary-end (string-match "\n\n" str))
-         (long-summary-end (string-match "\n\n" str (+ 2 short-summary-end)))
-         (str-without-summary (string-trim-left
-                               (substring str long-summary-end)))
-         (result `("short-summary" ,(string-trim-left (substring str 0 short-summary-end))
-                   "long-summary" ,(string-trim-left
-                                    (substring str short-summary-end
-                                               long-summary-end)))))
-    (dolist (s (split-string str-without-summary "\n\n"))
-      (let* ((split (split-string s "\n"))
-             (section-title (nth 0 split))
-             (body (if (string-equal section-title "Parameters")
-                       (mapcar (lambda (p)
-                                 (numpydoc--arg-str-to-struct
-                                  (string-trim-left p) indent))
-                               (numpydoc--preprocess-argstrings indent split))
-                     (seq-drop split 2))))
-        (setq result
-              (plist-put result section-title body))))
-    result))
-(numpydoc--parse-docstring 4 str)
-
-
-;; (let* ((beginning (string-match (rx (repeat 8 (any whitespace))) s))
-;;        (end (string-match (rx (= 4 (any whitespace))) s
-;;                                         (+ beginning (* 2 indent)))))
-;;   (substring s beginning end))
 
 ;; Local Variables:
 ;; sentence-end-double-space: nil

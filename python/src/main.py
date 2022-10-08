@@ -54,27 +54,6 @@ def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
     return new
 
 
-def atest(a, b: int, c: int = 3):
-    """A short description.
-
-    A long desc\on multiple lines
-
-    Parameters
-    ----------
-    a : str
-        Great variable
-    b : int
-    c : int
-        A number
-
-    Examples
-    --------
-    FIXME: Add docs.
-
-
-    """
-
-
 def main():
     """Quiet."""
     parser = argparse.ArgumentParser(
