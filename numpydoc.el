@@ -636,7 +636,7 @@ if __name__ == '__main__':
 (defun numpydoc--python-save-script ()
   (f-write-text numpydoc--python-program 'utf-8 numpydoc--python-script-save-location))
 
-(defun numpydoc--python-run (old new)
+(defun numpydoc--python-merge-docstrings (old new)
   ;; (unless (f-exists-p numpydoc--python-script-save-location))
   (numpydoc--python-save-script)
   (s-trim (shell-command-to-string
@@ -654,8 +654,7 @@ if __name__ == '__main__':
 (defun numpydoc-update ()
   "Update the docstring in the current function."
   (interactive)
-  (let* ((indent (numpydoc--detect-indent))
-         (old (when (numpydoc--has-existing-docstring-p)
+  (let* ((old (when (numpydoc--has-existing-docstring-p)
                 (numpydoc--python-get-function-docstring)))
          (new (progn
                 (numpydoc--delete-existing)
@@ -665,7 +664,7 @@ if __name__ == '__main__':
     (when old
       (numpydoc--delete-existing)
       (numpydoc--python-insert-function-docstring
-       (numpydoc--python-run old new)))))
+       (numpydoc--python-merge-docstrings old new)))))
 
 
 (defun numpydoc--python-get-function-docstring ()
@@ -688,14 +687,18 @@ if __name__ == '__main__':
 (defun numpydoc--python-insert-function-docstring (str)
   "Insert STR into the docstring position of current function."
   (save-excursion
-    (let ((indent (make-string (numpydoc--detect-indent) ?\s)))
+    (let ((indent (s-repeat (numpydoc--detect-indent) " ")))
       (python-nav-beginning-of-defun)
       (python-nav-end-of-statement)
       (insert "\n")
       (insert indent)
       (insert "\"\"\"\n")
+      (insert (s-join "\n"
+               (mapcar (lambda (s)
+                       (s-prepend indent (s-trim s)))
+                     (split-string str "\n"))))
+      (insert "\n")
       (insert indent)
-      (insert str)
       (insert "\"\"\""))))
 
 
