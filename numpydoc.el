@@ -607,7 +607,7 @@ def merge_parameters(existing: list, new: list) -> list:
             # In this case we need to find the corresponding parameter in existing.
             for existing_param in existing:
                 if existing_param.name == param.name:
-                    result.append(existing_param.strip())
+                    result.append(existing_param)
     return result
 
 
@@ -618,7 +618,7 @@ def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
             continue
         # If a field in new is empty we put in what was there before.
         if not v and k in existing:
-            new[k] = [k.strip for k in existing[k]]
+            new[k] = existing[k]
     return new
 
 
@@ -637,13 +637,13 @@ if __name__ == '__main__':
   (f-write-text numpydoc--python-program 'utf-8 numpydoc--python-script-save-location))
 
 (defun numpydoc--python-run (old new)
-  (unless (f-exists-p numpydoc--python-script-save-location)
-      (numpydoc--python-save-script))
-  (shell-command-to-string
-   (format "python %s \"%s\" \"%s\""
-           numpydoc--python-script-save-location
-           old
-           new)))
+  ;; (unless (f-exists-p numpydoc--python-script-save-location))
+  (numpydoc--python-save-script)
+  (s-trim (shell-command-to-string
+           (format "python %s \"%s\" \"%s\""
+                   numpydoc--python-script-save-location
+                   old
+                   new))))
 
 (defun numpydoc-update ()
   "Update the docstring in the current function."
@@ -662,9 +662,6 @@ if __name__ == '__main__':
        (numpydoc--python-run old new)))))
 
 
-(defun numpydoc-python-merge-docstrings (old new)
-  )
-
 (defun numpydoc--python-get-function-docstring ()
   "Get the docstring for the python function under cursor."
   (save-excursion
@@ -680,7 +677,7 @@ if __name__ == '__main__':
                                  (buffer-substring-no-properties
                                                function-doc-start
                                                (point-max))))))
-      (buffer-substring-no-properties function-doc-start function-doc-end))))
+      (s-trim (buffer-substring-no-properties function-doc-start function-doc-end)))))
 
 (defun numpydoc--python-insert-function-docstring (str)
   "Insert STR into the docstring position of current function."
