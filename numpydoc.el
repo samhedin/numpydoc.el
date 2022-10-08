@@ -72,8 +72,8 @@ installed and `yas-expand-snippet' will be used to insert components.
 When nil, template text will be inserted."
   :group 'numpydoc
   :type '(choice (const :tag "None" nil)
-                 (const :tag "Prompt" prompt)
-                 (const :tag "Yasnippet" yas)))
+          (const :tag "Prompt" prompt)
+          (const :tag "Yasnippet" yas)))
 
 (defcustom numpydoc-quote-char ?\"
   "Character for docstring quoting style (double or single quote)."
@@ -201,12 +201,12 @@ The argument takes on one of four possible styles:
                                :defval defval)))
         ;; only a name
         (t (let* ((split (s-split-up-to " " argstr 1))
-                 (description (nth 1 split)))
+                  (description (nth 1 split)))
              (make-numpydoc--arg :name  (nth 0 split)
-                                             :type nil
-                                             :defval nil
-                                             :description (when description
-                                                            (s-trim description)))))))
+                                 :type nil
+                                 :defval nil
+                                 :description (when description
+                                                (s-trim description)))))))
 
 (defun numpydoc--split-args (fnargs)
   "Split FNARGS on comma but ignore those in type [brackets]."
@@ -590,27 +590,75 @@ function that is being documented."
                                   (numpydoc--parse-def fnsig)))))
 
 
+(setq numpydoc--python-program
+      "
+#!/usr/bin/env python
+from numpydoc.docscrape import NumpyDocString
+from numpydoc.docscrape import FunctionDoc
+import argparse
+
+
+def merge_parameters(existing: list, new: list) -> list:
+    result = []
+    for i, param in enumerate(new):
+        if param.desc != []:
+            result.append(param)  # The parameter is in the correct position.
+        else:
+            # In this case we need to find the corresponding parameter in existing.
+            for existing_param in existing:
+                if existing_param.name == param.name:
+                    result.append(existing_param)
+    return result
+
+
+def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
+    new['Parameters'] = merge_parameters(existing['Parameters'], new['Parameters'])
+    for k, v in new.items():
+        if k in ['Parameters']:
+            continue
+        # If a field in new is empty we put in what was there before.
+        if not v and k in existing:
+            new[k] = existing[k]
+    return new
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Merge an old docstring with a new one. Prioritizes the new one.'
+    )
+    parser.add_argument('existing', type=str, help='The existing docstring.')
+    parser.add_argument('new', type=str, help='The new docstring.')
+    args = parser.parse_args()
+    print(merge(NumpyDocString(args.existing), NumpyDocString(args.new)))
+")
+
+(setq numpydoc--python-script-save-location "/tmp/numpydoc_tools.py")
+(defun numpydoc--python-save-script ()
+  (f-write-text numpydoc--python-program 'utf-8 numpydoc--python-script-save-location))
+
+(defun numpydoc--python-run (old new)
+  (numpydoc--python-insert-function-docstring
+   (shell-command-to-string
+    (format "python %s \"%s\" \"%s\""
+            numpydoc--python-script-save-location
+            old
+            new))))
 
 (defun numpydoc-update ()
   "Generate NumPy style docstring for Python function.
 Assumes that the current location of the cursor is somewhere in the
 function that is being documented."
   (interactive)
-  (let* ((indent (numpydoc--detect-indent))
-         (old (when (numpydoc--has-existing-docstring-p)
+  (let* ((old (when (numpydoc--has-existing-docstring-p)
                 (numpydoc--python-get-function-docstring)))
          (new (progn
                 (numpydoc--delete-existing)
                 (numpydoc-generate)
-                (numpydoc--parse-docstring indent
-                 (numpydoc--get-function-docstring)))))
+                (numpydoc--python-get-function-docstring))))
     (when old
       (numpydoc--delete-existing)
-      (numpydoc-python-merge-docstrings old new))))
+      (numpydoc--python-run old new))))
 
-
-(defun numpydoc-python-merge-docstrings (old new)
-  )
 
 (defun numpydoc--python-get-function-docstring ()
   (save-excursion
@@ -624,8 +672,8 @@ function that is being documented."
                                 (string-match
                                  "\"\"\""
                                  (buffer-substring-no-properties
-                                               function-doc-start
-                                               (point-max))))))
+                                  function-doc-start
+                                  (point-max))))))
       (buffer-substring-no-properties function-doc-start function-doc-end))))
 
 (defun numpydoc--python-insert-function-docstring (str)
