@@ -51,7 +51,7 @@
 
 (require 'dash)
 (require 's)
-(require 's)
+(require 'f)
 
 ;; forward declare some yasnippet code.
 (defvar yas-indent-line)
@@ -607,7 +607,7 @@ def merge_parameters(existing: list, new: list) -> list:
             # In this case we need to find the corresponding parameter in existing.
             for existing_param in existing:
                 if existing_param.name == param.name:
-                    result.append(existing_param)
+                    result.append(existing_param.strip())
     return result
 
 
@@ -618,7 +618,7 @@ def merge(existing: FunctionDoc, new: FunctionDoc) -> FunctionDoc:
             continue
         # If a field in new is empty we put in what was there before.
         if not v and k in existing:
-            new[k] = existing[k]
+            new[k] = [k.strip for k in existing[k]]
     return new
 
 
@@ -637,17 +637,16 @@ if __name__ == '__main__':
   (f-write-text numpydoc--python-program 'utf-8 numpydoc--python-script-save-location))
 
 (defun numpydoc--python-run (old new)
-  (numpydoc--python-insert-function-docstring
-   (shell-command-to-string
-    (format "python %s \"%s\" \"%s\""
-            numpydoc--python-script-save-location
-            old
-            new))))
+  (unless (f-exists-p numpydoc--python-script-save-location)
+      (numpydoc--python-save-script))
+  (shell-command-to-string
+   (format "python %s \"%s\" \"%s\""
+           numpydoc--python-script-save-location
+           old
+           new)))
 
 (defun numpydoc-update ()
-  "Generate NumPy style docstring for Python function.
-Assumes that the current location of the cursor is somewhere in the
-function that is being documented."
+  "Update the docstring in the current function."
   (interactive)
   (let* ((old (when (numpydoc--has-existing-docstring-p)
                 (numpydoc--python-get-function-docstring)))
@@ -655,12 +654,15 @@ function that is being documented."
                 (numpydoc--delete-existing)
                 (numpydoc-generate)
                 (numpydoc--python-get-function-docstring))))
+
     (when old
       (numpydoc--delete-existing)
-      (numpydoc--python-run old new))))
+      (numpydoc--python-insert-function-docstring
+       (numpydoc--python-run old new)))))
 
 
 (defun numpydoc--python-get-function-docstring ()
+  "Get the docstring for the python function under cursor."
   (save-excursion
     (python-nav-beginning-of-defun)
     (python-nav-end-of-statement)
@@ -677,8 +679,7 @@ function that is being documented."
       (buffer-substring-no-properties function-doc-start function-doc-end))))
 
 (defun numpydoc--python-insert-function-docstring (str)
-  "Insert STR into the docstring position of current function.
-Also inserts triple quotes."
+  "Insert STR into the docstring position of current function."
   (save-excursion
     (let ((indent (make-string (numpydoc--detect-indent) ?\s)))
       (python-nav-beginning-of-defun)
