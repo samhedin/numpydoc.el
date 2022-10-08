@@ -72,8 +72,8 @@ installed and `yas-expand-snippet' will be used to insert components.
 When nil, template text will be inserted."
   :group 'numpydoc
   :type '(choice (const :tag "None" nil)
-          (const :tag "Prompt" prompt)
-          (const :tag "Yasnippet" yas)))
+                 (const :tag "Prompt" prompt)
+                 (const :tag "Yasnippet" yas)))
 
 (defcustom numpydoc-quote-char ?\"
   "Character for docstring quoting style (double or single quote)."
@@ -201,12 +201,12 @@ The argument takes on one of four possible styles:
                                :defval defval)))
         ;; only a name
         (t (let* ((split (s-split-up-to " " argstr 1))
-                  (description (nth 1 split)))
+                 (description (nth 1 split)))
              (make-numpydoc--arg :name  (nth 0 split)
-                                 :type nil
-                                 :defval nil
-                                 :description (when description
-                                                (s-trim description)))))))
+                                             :type nil
+                                             :defval nil
+                                             :description (when description
+                                                            (s-trim description)))))))
 
 (defun numpydoc--split-args (fnargs)
   "Split FNARGS on comma but ignore those in type [brackets]."
@@ -648,7 +648,8 @@ if __name__ == '__main__':
 (defun numpydoc-update ()
   "Update the docstring in the current function."
   (interactive)
-  (let* ((old (when (numpydoc--has-existing-docstring-p)
+  (let* ((indent (numpydoc--detect-indent))
+         (old (when (numpydoc--has-existing-docstring-p)
                 (numpydoc--python-get-function-docstring)))
          (new (progn
                 (numpydoc--delete-existing)
@@ -660,6 +661,9 @@ if __name__ == '__main__':
       (numpydoc--python-insert-function-docstring
        (numpydoc--python-run old new)))))
 
+
+(defun numpydoc-python-merge-docstrings (old new)
+  )
 
 (defun numpydoc--python-get-function-docstring ()
   "Get the docstring for the python function under cursor."
@@ -674,8 +678,8 @@ if __name__ == '__main__':
                                 (string-match
                                  "\"\"\""
                                  (buffer-substring-no-properties
-                                  function-doc-start
-                                  (point-max))))))
+                                               function-doc-start
+                                               (point-max))))))
       (buffer-substring-no-properties function-doc-start function-doc-end))))
 
 (defun numpydoc--python-insert-function-docstring (str)
